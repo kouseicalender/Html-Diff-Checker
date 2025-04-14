@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>HTML名言比較ツール</title>
+  <style>
+    body { font-family: sans-serif; padding: 2em; }
+    h1 { font-size: 1.5em; }
+    .drop-area {
+      border: 2px dashed #ccc;
+      padding: 1em;
+      margin-bottom: 1em;
+      text-align: center;
+      color: #888;
+    }
+    table { border-collapse: collapse; width: 100%; margin-top: 2em; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; }
+    th { background: #f0f0f0; }
+    .diff { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>HTML名言比較ツール</h1>
+  <div class="drop-area" id="drop1">Excel由来のHTMLをここにドロップ</div>
+  <div class="drop-area" id="drop2">PDF由来のHTMLをここにドロップ</div>
+
+  <div id="result"></div>
+
+  <script>
+    let table1 = null;
+    let table2 = null;
+
+    function setupDropArea(id, callback) {
+      const area = document.getElementById(id);
+      area.addEventListener("dragover", e => { e.preventDefault(); area.style.borderColor = '#000'; });
+      area.addEventListener("dragleave", e => { area.style.borderColor = '#ccc'; });
+      area.addEventListener("drop", async e => {
+        e.preventDefault();
+        area.style.borderColor = '#ccc';
+        const file = e.dataTransfer.files[0];
+        const text = await file.text();
+        const parser = new DOMParser();
+        const htmlDoc = parser.parseFromString(text, "text/html");
+        const table = htmlDoc.querySelector("table");
+        if (!table) return alert("テーブルが見つかりませんでした");
+        if (id === 'drop1') { table1 = table; } else { table2 = table; }
+        if (table1 && table2) compareTables();
+      });
+    }
+
+    function clean(text) {
+      return text.replace(/[\s　]/g, '').trim();
+    }
+
+    function compareCell(cell1, cell2) {
+      const raw1 = cell1 || '';
+      const raw2 = cell2 || '';
+      const c1 = clean(raw1);
+      const c2 = clean(raw2);
+      if (c1 === c2) return { status: 'OK', text: raw1 };
+
+      // 差分説明
+      let diffText = '', reason = [];
+      for (let i = 0; i < raw2.length; i++) {
+        const ch1 = raw1[i] || '';
+        const ch2 = raw2[i] || '';
+        if (ch1 !== ch2) {
+          diffText += `<span class='diff'>${ch2}</span>`;
+          if (ch1 === ' ' || ch2 === ' ') reason.push('半スペあり');
+          else reason.push('文字差異');
+        } else {
+          diffText += ch2;
+        }
+      }
+      const reasonStr = [...new Set(reason)].join('・');
+      return { status: `NG（${reasonStr}）`, text: diffText };
+    }
+
+    function compareTables() {
+      const rows1 = [...table1.querySelectorAll("tr")].slice(1);
+      const rows2 = [...table2.querySelectorAll("tr")].slice(1);
+      const result = document.getElementById("result");
+      let html = `<table><tr><th>日付</th><th>Excel日本語</th><th>PDF日本語</th><th>結果</th></tr>`;
+
+      for (let i = 0; i < Math.max(rows1.length, rows2.length); i++) {
+        const cells1 = rows1[i]?.querySelectorAll("td") || [];
+        const cells2 = rows2[i]?.querySelectorAll("td") || [];
+        const date = cells1[0]?.innerText || cells2[0]?.innerText || `1/${i+1}`;
+        const excel = cells1[1]?.innerText || '';
+        const pdf = cells2[1]?.innerText || '';
+        const comp = compareCell(pdf, excel);
+        html += `<tr><td>${date}</td><td>${excel}</td><td>${pdf}</td><td>${comp.status}<br>${comp.text}</td></tr>`;
+      }
+
+      html += '</table>';
+      result.innerHTML = html;
+    }
+
+    setupDropArea("drop1");
+    setupDropArea("drop2");
+  </script>
+</body>
+</html>
